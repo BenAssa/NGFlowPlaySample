@@ -3,14 +3,16 @@
 # ~~~~
 
 
-# Home page
-GET         /                                                 controllers.Application.index()
-POST        /upload                                           controllers.Upload.upload
-GET         /upload                                           controllers.Upload.uploadGet
+GET     /               controllers.Assets.at(path="/public", file="index.html")
 
+POST    /upload         controllers.Upload.upload
+GET     /upload         controllers.Upload.uploadGet(flowChunkNumber: Int, flowChunkSize: Int, flowCurrentChunkSize: Int, flowTotalSize: Int, flowIdentifier: String, flowFilename: String, flowRelativePath: String, flowTotalChuks: Int)
 
-# Map static resources from the /public folder to the /public path
-GET         /assets/img/glyphicons-halflings-white.png        controllers.Assets.at(path="/public", file="/images/glyphicons-halflings-white.png")
-GET         /assets/img/glyphicons-halflings.png              controllers.Assets.at(path="/public", file="/images/glyphicons-halflings.png")
-# Map the JS resource paths
-GET        /assets/*file                            controllers.Assets.versioned(path="/public", file: Asset)
+# An example controller showing how to use dependency injection
+GET     /count          controllers.CountController.count
+# An example controller showing how to write asynchronous code
+GET     /message        controllers.AsyncController.message
+
+# Map static resources from the /public folder to the /assets URL path
+GET     /*file          controllers.Assets.versioned(path="/public", file: Asset)
+
