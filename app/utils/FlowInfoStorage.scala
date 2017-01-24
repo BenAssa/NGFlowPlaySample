@@ -1,36 +1,35 @@
 package utils
 
-import scala.collection.mutable
-
-/**
- * User: Kayrnt
- * Date: 19/10/14
- * Time: 17:10
- */
+import scala.collection.parallel.mutable.ParHashMap
 
 object FlowInfoStorage {
-  private var mMap: mutable.HashMap[String, FlowInfo] = new mutable.HashMap[String, FlowInfo]()
+    private var mMap: ParHashMap[String, FlowInfo] = new ParHashMap[String, FlowInfo]()
 
-  /**
-   * Get ResumableInfo from mMap or Create a new one.
-   * @param resumableChunkSize
-   * @param resumableTotalSize
-   * @param resumableIdentifier
-   * @param resumableFilename
-   * @param resumableRelativePath
-   * @param resumableFilePath
-   * @return
-   */
-  def get(resumableChunkSize: Int, resumableTotalSize: Long, resumableIdentifier: String, resumableFilename: String, resumableRelativePath: String, resumableFilePath: String): FlowInfo =
-    mMap.getOrElse(resumableIdentifier, {
-      val ri = FlowInfo(resumableChunkSize, resumableTotalSize, resumableIdentifier, resumableFilename, resumableRelativePath, resumableFilePath)
-      mMap += (ri.resumableIdentifier -> ri)
-      ri
-    })
+    /**
+      * Get ResumableInfo from mMap or Create a new one.
+      * @param flowIdentifier
+      * @param flowFileName
+      * @param flowRelativePath
+      * @param flowTotalChunks
+      * @return
+      */
+    def getOrCreateFlowEntry(flowIdentifier: String,
+                             flowFileName: String,
+                             flowRelativePath: String,
+                             flowTotalChunks: Int,
+                             flowChunkSize: Int): FlowInfo = {
+        mMap.getOrElse(flowIdentifier, {
+            val newFlowEntry = FlowInfo(flowIdentifier, flowFileName, flowRelativePath, flowTotalChunks, flowChunkSize)
+            mMap += (flowIdentifier -> newFlowEntry)
+            newFlowEntry
+        })
+    }
 
-  /**
-   * ResumableInfo
-   * @param info
-   */
-  def remove(info: FlowInfo) =  mMap -= info.resumableIdentifier
+    /**
+      * Removes the flow entry
+      * @param flowIdentifier
+      * @return
+      */
+    def removeFlowEntry(flowIdentifier: String) =  mMap -= flowIdentifier
 }
+

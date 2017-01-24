@@ -1,50 +1,75 @@
 package utils
 
-import java.io.File
+import scala.util.Try
+import java.io.{File, InputStream, RandomAccessFile}
 
-import play.Logger
+import com.typesafe.config.ConfigFactory
 
 /**
- * User: Kayrnt
- * Date: 19/10/14
- * Time: 16:45
- */
-case class FlowInfo(resumableChunkSize: Int,
-                         resumableTotalSize: Long = 0L,
-                         resumableIdentifier: String = null,
-                         resumableFilename: String = null,
-                         resumableRelativePath: String = null,
-                         resumableFilePath: String = null) {
+  * User: Kayrnt
+  * Date: 19/10/14
+  * Time: 16:45
+  */
+case class FlowInfo(identifier: String,
+                    filename: String,
+                    relativePath: String,
+                    totalChunks: Int,
+                    chunkSize: Int) {
 
-  type ResumableChunckNumber = Int
+    private val uploadedChunks: Array[Boolean] = new Array[Boolean](totalChunks)
 
-  var uploadedChunks: Set[Int] = Set[ResumableChunckNumber]()
+    def getTemporaryFilePathOnSystem: String = {
+        val temporaryFileBaseDir: String = ConfigFactory.load().getString("TEMPORARY_UPLOADS_DIRECTORY")
+        new File(temporaryFileBaseDir, filename).getAbsolutePath + ".temp"
+    }
 
-  def valid: Boolean = {
-    if (resumableChunkSize < 0 || resumableTotalSize < 0 || resumableIdentifier.isEmpty || resumableFilename.isEmpty || resumableRelativePath.isEmpty) false
-    else true
-  }
+    def getCompletedFilePathOnSystem: String = {
+        val completedFileBaseDir: String = ConfigFactory.load().getString("COMPLETED_UPLOADS_DIRECTORY")
+        new File(completedFileBaseDir, filename).getAbsolutePath
+    }
 
-  def checkIfUploadFinished: Boolean = {
-    //check if upload finished
-    val count: Int = Math.ceil(resumableTotalSize.toDouble / resumableChunkSize.toDouble).toInt
-    println("resumable ts :"+resumableTotalSize)
-    println("resumable cs :"+resumableChunkSize)
-    println("count :"+count)
-    (1 to count).map {
-      i =>
-        println("i >"+i)
-        if (!uploadedChunks.contains(i)) {
-          return false
+    def isUploadeComplete: Boolean = {
+        //check if upload finished
+        for(item <- uploadedChunks) {
+            if(!item) {
+                return false
+            }
+        }
+        true
+
+/*        //Upload finished, change filename.
+        return true*/
+    }
+
+    /**
+      * Returns whether the chunk number has already been downloaded. If the chunk number is bigger than the number of
+      * expected chunks, then `ArrayOutOfBoundException` is sent in the Try
+      * @param chunkNumber
+      * @return
+      */
+    def isChunkNumberUploaded(chunkNumber: Int): Try[Boolean] = {
+        val chunkNumber0BaseForArray = convert1BaseTo0Base(chunkNumber)
+        Try(uploadedChunks(chunkNumber0BaseForArray))
+    }
+
+    /**
+      * Sets the chunk number as downloaded. If the chunk number is larger than the expected number of chunks then
+      * `false` is returned, otherwise `true` if the update was successful
+      * @param chunkNumber
+      * @return
+      */
+    def setChunkNumberAsFullyUploaded(chunkNumber: Int): Boolean = {
+        if(chunkNumber > totalChunks) {
+            false
+        }else {
+            val chunkNumber0BaseForArray = convert1BaseTo0Base(chunkNumber)
+            uploadedChunks.update(chunkNumber0BaseForArray, true)
+            true
         }
     }
-    println(">")
-    //Upload finished, change filename.
-    val file: File = new File(resumableFilePath)
-    val newPath: String = file.getAbsolutePath.substring(0, file.getAbsolutePath.length - ".temp".length)
-    println("going to rename")
-    file.renameTo(new File(newPath))
-    Logger.info("file renamed to "+newPath)
-    return true
-  }
+
+    private def convert1BaseTo0Base(number: Int): Int = {
+        number -1
+    }
 }
+

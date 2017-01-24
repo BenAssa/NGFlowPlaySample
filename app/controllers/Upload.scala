@@ -2,77 +2,115 @@ package controllers
 
 import java.io._
 
+import com.typesafe.config.{Config, ConfigFactory}
 import play.api.Logger
+import play.api.data.Form
 import play.api.libs.Files.TemporaryFile
 import play.api.mvc.{MaxSizeExceeded, _}
-import utils.{FlowHelper, FlowInfoStorage, FlowInfo}
+import utils.{FlowHelper, FlowInfo, FlowInfoStorage}
 
-/**
- * User: Kayrnt
- * Date: 19/10/14
- * Time: 00:04
- */
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+import scala.util.{Failure, Success, Try}
+import play.api.data._
+import play.api.data.Forms._
+import play.api.mvc.MultipartFormData.FilePart
 
-object Upload extends Controller with FlowHelper {
+class Upload extends Controller with FlowHelper {
 
-  //we want to parse only up to 5MB
-  val multipartMaxLengthParser = parse.maxLength(1024 * 5000, parse.multipartFormData)
+    case class UploadMultiPart(flowCurrentChunkSize: Int,
+                               flowTotalSize: Int,
+                               flowIdentifier: String,
+                               flowFilename: String,
+                               flowRelativePath: String,
+                               flowChunkNumber: Int,
+                               flowTotalChunks: Int,
+                               flowChunkSize: Int)
+    val defaultConfig: Config = ConfigFactory.load()
+    val FILE_MULTIPART_FIELD_NAME: String = "file"
 
-  def upload = Action(multipartMaxLengthParser) {
-    implicit request =>
-      Logger.info("request accepted")
-      request.body.fold(sizeExceeded, sizeAccepted)
-  }
+    val uploadForm = Form(
+        mapping(
+        "flowCurrentChunkSize" -> number(min = 1),
+        "flowTotalSize" -> number(min = 1),
+        "flowIdentifier" -> nonEmptyText,
+        "flowFilename" -> nonEmptyText,
+        "flowRelativePath" -> nonEmptyText,
+        "flowChunkNumber" -> number(min = 1),
+        "flowTotalChunks" -> number(min = 1),
+        "flowChunkSize" -> number(min =1)
+        )(UploadMultiPart.apply)(UploadMultiPart.unapply)
+    )
 
-  private def sizeExceeded(size: MaxSizeExceeded) = {
-    Logger.info("File size exceeded " + size.length)
-    BadRequest("File size exceeded")
-  }
-
-  private def sizeAccepted(multipart: MultipartFormData[TemporaryFile])(implicit request: RequestHeader) = {
-    multipart.file("file").map { picture =>
-      Logger.info("using file")
-      //checking type, we want only pictures
-      picture.contentType match {
-        case Some("image/jpeg") | Some("image/png") =>
-          Logger.info("content type matched")
-          val is = new FileInputStream(picture.ref.file)
-          dealWithFile(is, multipart)
-        case _ => BadRequest("invalid content type")
-      }
-    }.getOrElse {
-      BadRequest("Missing file")
+    def upload = Action(parse.multipartFormData) { implicit request =>
+            uploadForm.bindFromRequest.fold(
+                formWithErrors => {
+                    BadRequest("Incorrect form data or form data not present")
+                },
+                uploadMultiPartData =>
+                    request.body.file(FILE_MULTIPART_FIELD_NAME).map { file =>
+/*                        file.contentType match {
+                            case Some("image/jpeg") | Some("image/png") =>
+                                Logger.info("File passed check - isImage")
+                                val is = new FileInputStream(picture.ref.file)
+                                dealWithFile(is, multipart)
+                            case _ => BadRequest("invalid content type")*/
+                        if(processFileAndReturnAreAllChunksUploaded(uploadMultiPartData, file.ref)) {
+                            Ok("Upload for Chunk Complete and All Chunks Uploaded Successfully")
+                        } else {
+                            Ok("Upload for Chunk Complete")
+                        }
+                    }.getOrElse(
+                        BadRequest("No file found in request"))
+            )
     }
-  }
 
-  def dealWithFile(is: InputStream, multipart: MultipartFormData[TemporaryFile])(implicit request: RequestHeader): Result = {
-    val flowChunkNumber: Int = getFlowChunkNumberMultipart(multipart)
-    val info: FlowInfo = getFlowInfoMultipart(multipart)
-    val contentLength: Long = request.headers("Content-Length").toLong
-    writeInTempFile(flowChunkNumber, info, contentLength, is)
-    info.uploadedChunks += flowChunkNumber
-    if (info.checkIfUploadFinished) {
-      FlowInfoStorage.remove(info)
-      println("file upload finished")
-      Ok("All finished.")
+    private def processFileAndReturnAreAllChunksUploaded(uploadedMultiPartData: UploadMultiPart,
+                            fileReference: TemporaryFile)(implicit request: RequestHeader):Boolean = {
+        val currentChunkNumber = uploadedMultiPartData.flowChunkNumber
+
+        val flowInfo: FlowInfo = FlowInfoStorage.getOrCreateFlowEntry(uploadedMultiPartData.flowIdentifier,
+                                                                      uploadedMultiPartData.flowFilename,
+                                                                      uploadedMultiPartData.flowRelativePath,
+                                                                      uploadedMultiPartData.flowTotalChunks,
+                                                                      uploadedMultiPartData.flowChunkSize)
+        val contentLength: Long = request.headers("Content-Length").toLong
+
+        val is = new FileInputStream(fileReference.file)
+        writeInTempFile(currentChunkNumber, flowInfo, contentLength, is)
+        Logger.debug(s"Successfully wrote the uploadedFile to: ${flowInfo.getTemporaryFilePathOnSystem}")
+        flowInfo.setChunkNumberAsFullyUploaded(currentChunkNumber)
+        if (flowInfo.isUploadeComplete) {
+            moveFileToCompletedDirectory(flowInfo)
+            FlowInfoStorage.removeFlowEntry(flowInfo.identifier)
+            Logger.debug(s"All parts of the file have been successfully uploaded (${flowInfo.totalChunks} chunks)")
+            true
+        } else {
+            false
+        }
     }
-    else {
-      Ok("Upload")
+
+    def uploadGet(chunkNumber: Int,
+                  chunkSize: Int,
+                  currentChunkSize: Int,
+                  totalSize: Int,
+                  identifier: String,
+                  filename: String,
+                  relativePath: String,
+                  totalChunks: Int): Action[AnyContent] = Action.async { implicit request =>
+        val info: FlowInfo = FlowInfoStorage.getOrCreateFlowEntry(identifier, filename, relativePath, totalChunks, chunkSize)
+        info.isChunkNumberUploaded(chunkNumber) match {
+            case Success(isChunkUploaded) =>
+                if(isChunkUploaded) {
+                    Logger.debug(s"Chunk $chunkNumber has already been uploaded")
+                    Future(Ok("Chunk already uploaded"))
+                }else {
+                    // Use any non-permanent error
+                    Logger.debug(s"Chunk $chunkNumber has NOT been uploaded")
+                    Future(NotAcceptable("Chunk has not been uploaded"))
+                }
+            case Failure(e) =>
+                Future(BadRequest(e.getMessage))
+        }
     }
-  }
-
-  def uploadGet() = Action {
-    request =>
-      val flowChunkNumber: Int = getFlowChunkNumber(request)
-      val info: FlowInfo = getFlowInfo(request)
-      if (info.uploadedChunks.contains(flowChunkNumber)) {
-        Ok
-      }
-      else {
-        NotFound
-      }
-  }
-
-  
-
 }
