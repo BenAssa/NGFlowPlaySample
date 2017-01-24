@@ -4,7 +4,10 @@ logs
 target
 /.idea
 npm-debug.log
-uploaded
+uploaded/**
+!uploaded/.gitignore
+tmp/**
+!tmp/.gitignore
 
 # Created by https://www.gitignore.io/api/macos,windows,osx,intellij,playframework,vim
 
@@ -136,7 +139,6 @@ bin/
 /modules
 /project/target
 /target
-tmp/
 test-result
 server.pid
 *.eml
