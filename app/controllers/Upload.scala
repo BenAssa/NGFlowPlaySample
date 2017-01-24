@@ -49,12 +49,6 @@ class Upload extends Controller with FlowHelper {
                 },
                 uploadMultiPartData =>
                     request.body.file(FILE_MULTIPART_FIELD_NAME).map { file =>
-/*                        file.contentType match {
-                            case Some("image/jpeg") | Some("image/png") =>
-                                Logger.info("File passed check - isImage")
-                                val is = new FileInputStream(picture.ref.file)
-                                dealWithFile(is, multipart)
-                            case _ => BadRequest("invalid content type")*/
                         if(processFileAndReturnAreAllChunksUploaded(uploadMultiPartData, file.ref)) {
                             Ok("Upload for Chunk Complete and All Chunks Uploaded Successfully")
                         } else {
