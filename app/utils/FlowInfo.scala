@@ -4,6 +4,7 @@ import scala.util.Try
 import java.io.{File, InputStream, RandomAccessFile}
 
 import com.typesafe.config.ConfigFactory
+import play.api.Logger
 
 /**
   * User: Kayrnt

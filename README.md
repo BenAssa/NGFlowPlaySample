@@ -1,28 +1,25 @@
-Play NG Flow sample
-==============================
+#Play NG Flow sample
 
-This project is a Play framework NG-flow sample.
-This app provides an image gallery upload module using NG-flow
-for the frontend and Play framework for the backend.
+Example project for setting up resumable, fault tolerant uploads using
+[NG-Flow](http://flowjs.github.io/ng-flow/) and [Play Framework](https://www.playframework.com/)
 
-Using it
---------
+## Setup
 
-* Run this application with it ('sbt run' in the root directory)
-* Go to [http://localhost:9000/](http://localhost:9000/)
+Requires [Activator](https://www.lightbend.com/activator/download) or [sbt](http://www.scala-sbt.org/download.html)
+
+    $ sbt run
+    # Or
+    $ activator run
+
 
 Screenshot
 --------
-![Screenshot](https://raw.githubusercontent.com/Kayrnt/NGFlowPlaySample/master/screenshot.jpg)
+![demo](readme_resources/NGflowsample_demo.gif)
 
-Libraries used
---------
-* [Play Framework] (http://www.playframework.com/)
-* [Bootstrap] (http://getbootstrap.com/)
-* [NG Flow] (https://github.com/flowjs/ng-flow)
+##Credits
 
-Contact Me
---------
+Heavily modified from code by [kayrnt](http://www.kayrnt.fr)
 
-* [@Kayrnt](https://twitter.com/Kayrnt)
-* [Porfolio](http://www.kayrnt.fr)
+## License
+
+[MIT](LICENSE)
